@@ -9,40 +9,77 @@ const Timetable = () => {
   const [openSection, setOpenSection] = useState(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
-  useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/current_user/`, { credentials: "include" })
-      .then((res) => {
-        if (res.status === 401) {
-          router.replace("/signin");
-          return null;
-        }
-        return res.json();
-      })
-      .then((resData) => {
-        if (!resData) return;
-        if (!resData.length || !resData[0].entries.length) {
-          setData(null);
-        } else {
-          setData(resData[0].entries);
-        }
-      })
-      .catch(() => setData(null))
-      .finally(() => setLoading(false));
-  }, [router]);
+  // ЭНЭ 2 useEffect-ийг устга, доорхоор солино уу
 
-  // Хуваарийн дата тусдаа fetch
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/`, { credentials: "include" })
-      .then((res) => res.json())
-      .then((resData) => {
+    const checkAuthAndLoad = async () => {
+      try {
+        // 1. Эхлээд auth шалгана
+        const authRes = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/current_user/`,
+          { credentials: "include" }
+        );
+
+        if (authRes.status === 401) {
+          router.replace("/auth/signin");
+          return;
+        }
+
+        // 2. Auth OK бол хуваарь татна
+        const scheduleRes = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/`,
+          { credentials: "include" }
+        );
+        const resData = await scheduleRes.json();
+
         if (!resData.length || !resData[0].entries.length) {
           setData(null);
         } else {
           setData(resData[0].entries);
         }
-      })
-      .catch(() => setData(null));
-  }, []);
+      } catch {
+        setData(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkAuthAndLoad();
+  }, [router]);
+  // useEffect(() => {
+  //   fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/current_user/`, { credentials: "include" })
+  //     .then((res) => {
+  //       if (res.status === 401) {
+  //         router.replace("/signin");
+  //         return null;
+  //       }
+  //       return res.json();
+  //     })
+  //     .then((resData) => {
+  //       if (!resData) return;
+  //       if (!resData.length || !resData[0].entries.length) {
+  //         setData(null);
+  //       } else {
+  //         setData(resData[0].entries);
+  //       }
+  //     })
+  //     .catch(() => setData(null))
+  //     .finally(() => setLoading(false));
+  // }, [router]);
+
+  // // Хуваарийн дата тусдаа fetch
+  // useEffect(() => {
+  //   fetch(`${process.env.NEXT_PUBLIC_API_URL}/`, { credentials: "include" })
+  //     .then((res) => res.json())
+  //     .then((resData) => {
+  //       if (!resData.length || !resData[0].entries.length) {
+  //         setData(null);
+  //       } else {
+  //         setData(resData[0].entries);
+  //       }
+  //     })
+  //     .catch(() => setData(null));
+  // }, []);
 
   const downloadPdf = async () => {
     try {
@@ -238,11 +275,11 @@ const Timetable = () => {
               id="capture-wrapper"
             >
               <table className="min-w-full border-collapse text-[13px]">
-              {/* <table className="min-w-full border-collapse text-[13px] border-2 border-slate-700"> */}
+                {/* <table className="min-w-full border-collapse text-[13px] border-2 border-slate-700"> */}
 
                 <thead>
                   <tr className="bg-slate-800 text-white">
-                  {/* <tr className="bg-slate-800 text-white border-b-2 border-slate-600"> */}
+                    {/* <tr className="bg-slate-800 text-white border-b-2 border-slate-600"> */}
 
                     {/* <th className="py-4 px-4 border-r border-slate-900 font-black uppercase tracking-wider sticky left-0 z-20 bg-slate-800"> */}
                     <th className="py-4 px-4 border-r border-slate-900 font-black uppercase tracking-wider sticky left-0 z-20 bg-slate-800">
@@ -303,7 +340,7 @@ const Timetable = () => {
                             <td
                               rowSpan={times.length}
                               className="border-r-2 border-slate-500 text-center font-black bg-slate-50 text-slate-700 uppercase vertical-text sticky left-0 z-10 w-20"
-                              // className="border-r border-slate-400 text-center font-black bg-slate-50 text-slate-700 uppercase vertical-text sticky left-0 z-10 w-20"
+                            // className="border-r border-slate-400 text-center font-black bg-slate-50 text-slate-700 uppercase vertical-text sticky left-0 z-10 w-20"
                             >
                               <span className="rotate-180 [writing-mode:vertical-lr]">
                                 {day}
@@ -311,7 +348,7 @@ const Timetable = () => {
                             </td>
                           )}
                           <td className="border-r-2 border-slate-500 py-4 px-3 text-center font-bold text-slate-500 bg-white sticky left-[78px] z-10 whitespace-nowrap">
-                          {/* <td className="border-r border-slate-400 py-4 px-3 text-center font-bold text-slate-500 bg-white sticky left-[78px] z-10 whitespace-nowrap"> */}
+                            {/* <td className="border-r border-slate-400 py-4 px-3 text-center font-bold text-slate-500 bg-white sticky left-[78px] z-10 whitespace-nowrap"> */}
                             {time}
                           </td>
                           {groupsList.map((group) => {
@@ -341,14 +378,13 @@ const Timetable = () => {
                                   key={group}
                                   colSpan={consecutiveCount}
                                   className="border-r-2 border-slate-500 p-2 transition-all"
-                                  // className="border-r border-slate-400 p-2 transition-all"
+                                // className="border-r border-slate-400 p-2 transition-all"
                                 >
                                   <div
-                                    className={`h-full rounded-2xl p-3 text-center shadow-sm border flex flex-col justify-center gap-1 ${
-                                      isLecture
+                                    className={`h-full rounded-2xl p-3 text-center shadow-sm border flex flex-col justify-center gap-1 ${isLecture
                                         ? "bg-blue-50 border-blue-200 text-blue-900"
                                         : "bg-emerald-50 border-emerald-200 text-emerald-900"
-                                    }`}
+                                      }`}
                                   >
                                     <div className="font-black leading-tight uppercase tracking-tighter text-[11px] opacity-70 mb-1">
                                       {lesson.lesson_type}
@@ -373,7 +409,7 @@ const Timetable = () => {
                               <td
                                 key={group}
                                 className="border-r-2 border-slate-400 p-2"
-                                // className="border-r border-slate-300 p-2"
+                              // className="border-r border-slate-300 p-2"
                               ></td>
                             );
                           })}
