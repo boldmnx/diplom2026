@@ -1,0 +1,394 @@
+"use client";
+import React, { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import TeacherScheduleTable from "@/components/TeacherScheduleTable";
+import { toPng } from "html-to-image";
+
+const Timetable = () => {
+  const [data, setData] = useState([]);
+  const [openSection, setOpenSection] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+  useEffect(() => {
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/current_user/`, { credentials: "include" })
+      .then((res) => {
+        if (res.status === 401) {
+          router.replace("/signin");
+          return null;
+        }
+        return res.json();
+      })
+      .then((resData) => {
+        if (!resData) return;
+        if (!resData.length || !resData[0].entries.length) {
+          setData(null);
+        } else {
+          setData(resData[0].entries);
+        }
+      })
+      .catch(() => setData(null))
+      .finally(() => setLoading(false));
+  }, [router]);
+
+  // Хуваарийн дата тусдаа fetch
+  useEffect(() => {
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/`, { credentials: "include" })
+      .then((res) => res.json())
+      .then((resData) => {
+        if (!resData.length || !resData[0].entries.length) {
+          setData(null);
+        } else {
+          setData(resData[0].entries);
+        }
+      })
+      .catch(() => setData(null));
+  }, []);
+
+  const downloadPdf = async () => {
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/schedule_pdf_view/`, {
+        method: "GET",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error();
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "student_schedule.pdf";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch {
+      alert("PDF татахад алдаа гарлаа");
+    }
+  };
+
+  const downloadImage = async () => {
+    const element = document.getElementById("student-schedule");
+    if (!element) return;
+
+    const scrollWrapper = element.querySelector(".overflow-x-auto");
+    const table = element.querySelector("table");
+    const fullWidth = table ? table.scrollWidth : element.scrollWidth;
+    const fullHeight = element.scrollHeight;
+
+    const origOverflow = scrollWrapper?.style.overflow;
+    if (scrollWrapper) scrollWrapper.style.overflow = "visible";
+
+    const stickyEls = element.querySelectorAll(".sticky");
+    stickyEls.forEach((el) => {
+      el.dataset.origPos = el.style.position;
+      el.style.position = "static";
+    });
+
+    try {
+      const dataUrl = await toPng(element, {
+        quality: 1,
+        pixelRatio: 2,
+        backgroundColor: "#ffffff",
+        width: fullWidth,
+        height: fullHeight,
+        style: {
+          width: fullWidth + "px",
+          height: fullHeight + "px",
+          overflow: "visible",
+        },
+      });
+      const link = document.createElement("a");
+      link.download = "schedule.png";
+      link.href = dataUrl;
+      link.click();
+    } finally {
+      if (scrollWrapper) scrollWrapper.style.overflow = origOverflow || "";
+      stickyEls.forEach((el) => {
+        el.style.position = el.dataset.origPos || "";
+        delete el.dataset.origPos;
+      });
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-violet-600 font-bold text-lg animate-pulse">
+          Session шалгаж байна...
+        </p>
+      </div>
+    );
+  }
+
+  if (data === null) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <p className="text-slate-500 font-medium">
+          Давхцал гарлаа эсвэл бүх slot дүүрсэн байна.
+        </p>
+      </div>
+    );
+  }
+
+  if (!data.length) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+        <p className="ml-3 text-slate-500 font-medium">
+          Хуваарь ачааллаж байна...
+        </p>
+      </div>
+    );
+  }
+
+  const dayMap = {
+    Mon: "Даваа",
+    Tue: "Мягмар",
+    Wed: "Лхагва",
+    Thu: "Пүрэв",
+    Fri: "Баасан",
+  };
+  const orderedDays = ["Даваа", "Мягмар", "Лхагва", "Пүрэв", "Баасан"];
+  const groupedByDay = data.reduce((acc, item) => {
+    const day = dayMap[item.day] || item.day;
+    if (!acc[day]) acc[day] = [];
+    acc[day].push(item);
+    return acc;
+  }, {});
+
+  const groupsList = [
+    "Мэдээллийн систем (1-1)",
+    "Программ хангамж (1-1)",
+    "Программ хангамж (1-2)",
+    "Программ хангамж (2-1)",
+    "Мэдээллийн систем (2-1)",
+    "Мэдээллийн систем (3-1)",
+    "Программ хангамж (3-1)",
+    "Мэдээллийн систем (4-1)",
+    "Программ хангамж (4-1)",
+  ];
+
+  return (
+    <div className="max-w-[1600px] mx-auto p-4 md:p-8 space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-400 shadow-sm">
+        <div>
+          <h2 className="text-2xl font-black text-slate-800 tracking-tight uppercase">
+            Хичээлийн нэгдсэн хуваарь
+          </h2>
+          <p className="text-slate-500 text-sm font-medium italic">
+            2024-2025 оны Намрын улирал
+          </p>
+        </div>
+        <div className="flex gap-2 text-xs font-bold uppercase">
+          <span className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg border border-blue-100">
+            <span className="w-2 h-2 rounded-full bg-blue-500"></span> Лекц
+          </span>
+          <span className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg border border-emerald-100">
+            <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Лаб /
+            Сем
+          </span>
+        </div>
+      </div>
+
+      <button
+        onClick={() =>
+          setOpenSection(openSection === "teacher" ? null : "teacher")
+        }
+        className="w-full text-left p-4 bg-blue-50 rounded-xl font-bold"
+      >
+        Багшийн хичээлийн хуваарь
+      </button>
+      {openSection === "teacher" && (
+        <div className="mt-4">
+          <TeacherScheduleTable data={data} />
+        </div>
+      )}
+
+      <button
+        onClick={() =>
+          setOpenSection(openSection === "student" ? null : "student")
+        }
+        className="w-full text-left p-4 bg-emerald-50 rounded-xl font-bold"
+      >
+        Оюутны хичээлийн хуваарь
+      </button>
+      {openSection === "student" && (
+        <div className="mt-4 bg-white shadow-xl shadow-slate-200/50 rounded-[2rem] border border-slate-400 overflow-hidden">
+          <h2 className="text-xl font-bold mb-4">Оюутны хичээлийн хуваарь</h2>
+          <div className="flex justify-end gap-2 mb-4">
+            <button
+              onClick={downloadPdf}
+              className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-colors"
+            >
+              PDF татах
+            </button>
+            <button
+              onClick={downloadImage}
+              className="px-4 py-2 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 transition-colors"
+            >
+              Зураг татах
+            </button>
+          </div>
+
+          <div
+            id="student-schedule"
+            style={{ color: "#000", background: "#fff" }}
+            className="bg-white shadow-xl shadow-slate-200/50 rounded-[2rem] border border-slate-400 overflow-hidden"
+          >
+            <div
+              className="overflow-x-auto custom-scrollbar"
+              id="capture-wrapper"
+            >
+              <table className="min-w-full border-collapse text-[13px]">
+              {/* <table className="min-w-full border-collapse text-[13px] border-2 border-slate-700"> */}
+
+                <thead>
+                  <tr className="bg-slate-800 text-white">
+                  {/* <tr className="bg-slate-800 text-white border-b-2 border-slate-600"> */}
+
+                    {/* <th className="py-4 px-4 border-r border-slate-900 font-black uppercase tracking-wider sticky left-0 z-20 bg-slate-800"> */}
+                    <th className="py-4 px-4 border-r border-slate-900 font-black uppercase tracking-wider sticky left-0 z-20 bg-slate-800">
+
+                      Өдөр
+                    </th>
+                    <th className="py-4 px-4 border-r-2 border-slate-600 font-black uppercase tracking-wider sticky left-[78px] z-20 bg-slate-800">
+                      Цаг
+                    </th>
+                    {groupsList.map((g) => (
+                      <th
+                        key={g}
+                        className="py-4 px-3 border-r border-slate-900 font-bold min-w-[140px] leading-tight"
+                      >
+                        {g}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                {/* <tbody className="divide-y divide-slate-200"> */}
+                <tbody className="divide-y-2 divide-slate-400">
+
+                  {orderedDays.map((day) => {
+                    const lessons = groupedByDay[day] || [];
+                    const groupedByTime = lessons.reduce((acc, l) => {
+                      if (!acc[l.time]) acc[l.time] = [];
+                      acc[l.time].push(l);
+                      return acc;
+                    }, {});
+                    const times = Object.keys(groupedByTime).sort();
+
+                    return times.map((time, i) => {
+                      const timeLessons = groupedByTime[time];
+                      const uniqueLessons = [];
+                      timeLessons.forEach((l) => {
+                        const existing = uniqueLessons.find(
+                          (u) =>
+                            u.course_name === l.course_name &&
+                            u.lesson_type === l.lesson_type &&
+                            u.room === l.room &&
+                            u.teacher === l.teacher
+                        );
+                        if (existing) {
+                          existing.groups = [
+                            ...new Set([...existing.groups, ...l.groups]),
+                          ];
+                        } else {
+                          uniqueLessons.push({ ...l });
+                        }
+                      });
+
+                      return (
+                        <tr
+                          key={`${day}-${time}`}
+                          className="group hover:bg-slate-50 transition-colors"
+                        >
+                          {i === 0 && (
+                            <td
+                              rowSpan={times.length}
+                              className="border-r-2 border-slate-500 text-center font-black bg-slate-50 text-slate-700 uppercase vertical-text sticky left-0 z-10 w-20"
+                              // className="border-r border-slate-400 text-center font-black bg-slate-50 text-slate-700 uppercase vertical-text sticky left-0 z-10 w-20"
+                            >
+                              <span className="rotate-180 [writing-mode:vertical-lr]">
+                                {day}
+                              </span>
+                            </td>
+                          )}
+                          <td className="border-r-2 border-slate-500 py-4 px-3 text-center font-bold text-slate-500 bg-white sticky left-[78px] z-10 whitespace-nowrap">
+                          {/* <td className="border-r border-slate-400 py-4 px-3 text-center font-bold text-slate-500 bg-white sticky left-[78px] z-10 whitespace-nowrap"> */}
+                            {time}
+                          </td>
+                          {groupsList.map((group) => {
+                            const lesson = uniqueLessons.find((l) =>
+                              l.groups.includes(group)
+                            );
+                            if (lesson && !lesson.rendered) {
+                              const startIdx = groupsList.indexOf(group);
+                              const consecutiveCount = groupsList
+                                .slice(startIdx)
+                                .reduce((count, g, idx, arr) => {
+                                  if (
+                                    lesson.groups.includes(g) &&
+                                    (idx === 0 ||
+                                      lesson.groups.includes(arr[idx - 1]))
+                                  ) {
+                                    return count + 1;
+                                  }
+                                  return count;
+                                }, 0);
+                              lesson.rendered = true;
+                              const isLecture = lesson.lesson_type
+                                ?.toLowerCase()
+                                .includes("лекц");
+                              return (
+                                <td
+                                  key={group}
+                                  colSpan={consecutiveCount}
+                                  className="border-r-2 border-slate-500 p-2 transition-all"
+                                  // className="border-r border-slate-400 p-2 transition-all"
+                                >
+                                  <div
+                                    className={`h-full rounded-2xl p-3 text-center shadow-sm border flex flex-col justify-center gap-1 ${
+                                      isLecture
+                                        ? "bg-blue-50 border-blue-200 text-blue-900"
+                                        : "bg-emerald-50 border-emerald-200 text-emerald-900"
+                                    }`}
+                                  >
+                                    <div className="font-black leading-tight uppercase tracking-tighter text-[11px] opacity-70 mb-1">
+                                      {lesson.lesson_type}
+                                    </div>
+                                    <div className="font-bold text-[14px] leading-snug">
+                                      {lesson.course_name}
+                                    </div>
+                                    <div className="flex flex-col gap-0.5 mt-1">
+                                      <span className="text-[11px] font-bold bg-white/60 py-0.5 px-2 rounded-full self-center border border-white/40">
+                                        🚪 {lesson.room}
+                                      </span>
+                                      <span className="text-[11px] font-medium opacity-80">
+                                        👤 {lesson.teacher}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </td>
+                              );
+                            }
+                            if (lesson && lesson.rendered) return null;
+                            return (
+                              <td
+                                key={group}
+                                className="border-r-2 border-slate-400 p-2"
+                                // className="border-r border-slate-300 p-2"
+                              ></td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    });
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default Timetable;
